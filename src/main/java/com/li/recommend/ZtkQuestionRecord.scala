@@ -2,26 +2,29 @@ package com.li.recommend
 
 import java.text.DecimalFormat
 
+import com.mongodb.spark.MongoSpark
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
 import org.apache.spark.mllib.linalg.Vectors
 
+case class ZtkQuestionRecord()
+
 object ZtkQuestionRecord {
-    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
-    Logger.getLogger("org.apache.eclipse.jetty.server").setLevel(Level.OFF)
 
 
   def main(args: Array[String]): Unit = {
 
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
+    Logger.getLogger("org.apache.eclipse.jetty.server").setLevel(Level.OFF)
 
     val inputUrl = "mongodb://huatu_ztk:wEXqgk2Q6LW8UzSjvZrs@192.168.100.153:27017,192.168.100.154:27017,192.168.100.155:27017/huatu_ztk"
     val collection = "ztk_question"
 
     val conf = new SparkConf()
       .setAppName("ZtkQuestionRecord")
-//      .setMaster("local[8]")
+      .setMaster("local[8]")
       .set("spark.sql.crossJoin.enabled", "true")
       .set("spark.default.parallelism", "8")
       .set("spark.scheduler.mode", "FAIR")
@@ -34,6 +37,9 @@ object ZtkQuestionRecord {
       .config("spark.mongodb.input.collection", collection)
       .getOrCreate()
     val sc = session.sparkContext
+
+
+    //    MongoSpark.load(session)
 
     import session.implicits._
 
@@ -146,10 +152,19 @@ object ZtkQuestionRecord {
     var initializationMode = "k-means||"
 
     val clusters: KMeansModel = KMeans.train(trainingData, numClusters, numIterations, initializationMode, runTimes)
+    val predictCluster = sc.broadcast(clusters)
+
     val cost = clusters.computeCost(trainingData)
     println(s"computeCost => $cost")
 
-    val predictCluster = sc.broadcast(clusters)
+    val kpoint2Location = Map[Int,Vectors.type ]()
+
+    clusters.clusterCenters.foreach(
+      x => {
+        println("Center Point of Cluster " + clusterIndex + ":")
+        println(x)
+        clusterIndex += 1
+      })
 
     testData.map {
       line =>
@@ -162,12 +177,12 @@ object ZtkQuestionRecord {
     }.saveAsTextFile("hdfs://master/ztk_question_record/ztk_question_rating")
 
 
-//    testData.collect().foreach(line => {
-//      val predictedClusterIndex: Int = clusters.predict(line._2)
-//
-//      println("The data " + line._1 + " belongs to cluster " +
-//        predictedClusterIndex)
-//    })
+    //    testData.collect().foreach(line => {
+    //      val predictedClusterIndex: Int = clusters.predict(line._2)
+    //
+    //      println("The data " + line._1 + " belongs to cluster " +
+    //        predictedClusterIndex)
+    //    })
 
     sc.stop()
   }
