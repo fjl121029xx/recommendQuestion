@@ -9,7 +9,13 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
 import org.apache.spark.mllib.linalg.Vectors
 
-case class ZtkQuestionRecord()
+case class parseRating(
+                        val year: String,
+                        val area: Int,
+                        val firPoint: Int,
+                        val secPoint: Int,
+                        val thrPoint: Int
+                      )
 
 object ZtkQuestionRecord {
 
@@ -157,7 +163,7 @@ object ZtkQuestionRecord {
     val cost = clusters.computeCost(trainingData)
     println(s"computeCost => $cost")
 
-    val kpoint2Location = Map[Int,Vectors.type ]()
+    val kpoint2Location = Map[Int, Vectors.type]()
 
     clusters.clusterCenters.foreach(
       x => {
