@@ -8,7 +8,7 @@ object ZtkRecommendQuestions {
 
   def main(args: Array[String]): Unit = {
     val conf = new SparkConf()
-      .setMaster("local")
+//      .setMaster("local")
       .setAppName("RecommendQuestion")
 
     val sc = new SparkContext(conf)
