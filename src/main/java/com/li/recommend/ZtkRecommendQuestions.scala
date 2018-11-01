@@ -10,6 +10,7 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.{SparkConf, SparkContext}
 
+import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Map}
 
 case class ZtkRecommendQuestions(
@@ -28,7 +29,7 @@ object ZtkRecommendQuestions {
     val inputUrl = "mongodb://huatu_ztk:wEXqgk2Q6LW8UzSjvZrs@192.168.100.153:27017,192.168.100.154:27017,192.168.100.155:27017/huatu_ztk"
 
     val conf = new SparkConf()
-      //            .setMaster("local")
+//      .setMaster("local")
       .setAppName("RecommendQuestion")
       .set("spark.reducer.maxSizeInFlight", "128m")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -49,7 +50,7 @@ object ZtkRecommendQuestions {
 
     val ztk_question = sparkSql.loadFromMongoDB(
       ReadConfig(
-        Map(
+        mutable.Map(
           "uri" -> inputUrl.concat(".ztk_question"),
           "maxBatchSize" -> "1000000",
           "keep_alive_ms" -> "500")
@@ -60,7 +61,7 @@ object ZtkRecommendQuestions {
       .rdd
       .filter {
         f =>
-          !f.isNullAt(0) && f.getSeq[Double](0).nonEmpty
+          !f.isNullAt(0) && f.getSeq[Double](0).nonEmpty && f.getSeq[Double](0).size > 2
       }
       .mapPartitions {
         ite =>
@@ -70,7 +71,7 @@ object ZtkRecommendQuestions {
             val next = ite.next()
 
             val points = next.get(0).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
-            arr += points(2)
+            arr += points.last
           }
           arr.iterator
       }.distinct().collect()) // 得到知识点集合
@@ -183,22 +184,6 @@ object ZtkRecommendQuestions {
             }
             import scala.util.control._
 
-            pids.foreach { f =>
-              var flag = false
-              val loop = new Breaks
-              loop.breakable {
-                s.foreach(l =>
-                  if (l._1 == f) {
-                    flag = true
-                    loop.break()
-                  }
-                )
-              }
-
-              if (!flag) {
-                s += Tuple3(f, 0, 0.00)
-              }
-            }
             arr += Tuple2(user_id, s)
           }
           arr.iterator
@@ -215,8 +200,8 @@ object ZtkRecommendQuestions {
 
     val jobConf = new JobConf(hbaseConf)
     jobConf.setOutputFormat(classOf[TableOutputFormat])
-    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "ztk_point_question")
-    val hbasePar = user_question_point_isGrasp.mapPartitions {
+    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "ztk_user_question_point_isGrasp")
+    val hbasePar = user_question_point_isGrasp.repartition(339).mapPartitions {
       ite =>
 
         var buffer = new ArrayBuffer[(ImmutableBytesWritable, Put)]()
