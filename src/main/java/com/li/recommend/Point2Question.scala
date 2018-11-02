@@ -68,7 +68,9 @@ object Point2Question {
 
             val subject = next.get(3).asInstanceOf[Double].intValue()
 
+
             arr += Tuple2(subject + "-" + points(2), _id.toString)
+
           }
           arr.iterator
       }

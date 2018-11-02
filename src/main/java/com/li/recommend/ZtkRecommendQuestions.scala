@@ -57,24 +57,25 @@ object ZtkRecommendQuestions {
       )).toDF() // Uses the ReadConfig
     ztk_question.printSchema()
     ztk_question.createOrReplaceTempView("ztk_question")
-    val points = sc.broadcast(sparkSql.sql("select points from ztk_question")
+
+    val question2points = sc.broadcast(sparkSql.sql("select _id, points from ztk_question")
       .rdd
       .filter {
         f =>
-          !f.isNullAt(0) && f.getSeq[Double](0).nonEmpty && f.getSeq[Double](0).size > 2
+          !f.isNullAt(0) && !f.isNullAt(1) && f.getSeq[Double](1).nonEmpty && f.getSeq[Double](1).size > 2
       }
       .mapPartitions {
         ite =>
-          val arr = new ArrayBuffer[Int]()
+          val arr = new ArrayBuffer[(Int, Int)]()
 
           while (ite.hasNext) {
             val next = ite.next()
-
-            val points = next.get(0).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
-            arr += points.last
+            val _id = next.get(0).asInstanceOf[Double].intValue()
+            val points = next.get(1).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
+            arr += Tuple2(_id, points.last)
           }
           arr.iterator
-      }.distinct().collect()) // 得到知识点集合
+      }.collectAsMap()) // 得到知识点集合
 
 
     /**
@@ -90,7 +91,22 @@ object ZtkRecommendQuestions {
             val next = ite.next()
 
             val line = next.split("_")
-            arr += Tuple2(line(0).toInt + "-" + line(1).toInt, line(2).split(",").length)
+            val user_id = line(0).toInt
+            val question_id = line(2).split(",")
+
+            val q2p = question2points.value
+
+            question_id.map(f => (q2p(f.toInt), 1)).groupBy(_._1).map {
+              case (a: Int, b: Array[(Int, Int)]) => {
+                var count = 0
+                b.foreach(f => count + f._2)
+                (a, count)
+              }
+            }.foreach {
+              f =>
+                arr += Tuple2(user_id + "-" + f._1, f._2)
+            }
+
           }
           arr.iterator
       }.collectAsMap())
@@ -104,10 +120,25 @@ object ZtkRecommendQuestions {
           var arr = new ArrayBuffer[(String, Int)]()
 
           while (ite.hasNext) {
+
             val next = ite.next()
 
             val line = next.split("_")
-            arr += Tuple2(line(0).toInt + "-" + line(1).toInt, line(2).split(",").length)
+            val user_id = line(0).toInt
+            val question_id = line(2).split(",")
+
+            val q2p = question2points.value
+
+            question_id.map(f => (q2p(f.toInt), 1)).groupBy(_._1).map {
+              case (a: Int, b: Array[(Int, Int)]) => {
+                var count = 0
+                b.foreach(f => count + f._2)
+                (a, count)
+              }
+            }.foreach {
+              f =>
+                arr += Tuple2(user_id + "-" + f._1, f._2)
+            }
           }
           arr.iterator
       }
@@ -126,7 +157,21 @@ object ZtkRecommendQuestions {
             val next = ite.next()
 
             val line = next.split("_")
-            arr += Tuple2(line(0).toInt + "-" + line(1).toInt, line(2).split(",").length)
+            val user_id = line(0).toInt
+            val question_id = line(2).split(",")
+
+            val q2p = question2points.value
+
+            question_id.map(f => (q2p(f.toInt), 1)).groupBy(_._1).map {
+              case (a: Int, b: Array[(Int, Int)]) => {
+                var count = 0
+                b.foreach(f => count + f._2)
+                (a, count)
+              }
+            }.foreach {
+              f =>
+                arr += Tuple2(user_id + "-" + f._1, f._2)
+            }
           }
           arr.iterator
       }
@@ -147,7 +192,7 @@ object ZtkRecommendQuestions {
 
             if (fin + wro + col != 0) {
               val isGrasp = wro * 1.0 / (fin + wro + col)
-              if (isGrasp > 0.30) {
+              if (isGrasp > 0.40) {
                 arr += ZtkRecommendQuestions(user2Point.split("-")(0).toInt, user2Point.split("-")(1).toInt, 1, isGrasp)
               } else {
                 arr += ZtkRecommendQuestions(user2Point.split("-")(0).toInt, user2Point.split("-")(1).toInt, 0, isGrasp)
@@ -160,10 +205,11 @@ object ZtkRecommendQuestions {
 
           arr.iterator
       }
+      .filter(_.isGrasp == 1)
       .groupBy(_.user_id)
       .mapPartitions {
         ite =>
-          val pids = points.value
+          val pids = question2points.value
           val arr = new ArrayBuffer[(Int, Seq[(Int, Int, Double)])]()
 
           while (ite.hasNext) {
@@ -181,6 +227,7 @@ object ZtkRecommendQuestions {
               val wrongRate = n.wrongRate
 
               s += Tuple3(question_point_id, isGrasp, wrongRate)
+              s.sortBy(_._3)
             }
             import scala.util.control._
 
@@ -188,7 +235,6 @@ object ZtkRecommendQuestions {
           }
           arr.iterator
       }
-
     val hbaseConf = HBaseConfiguration.create()
     hbaseConf.set("hbase.zookeeper.quorum", "192.168.100.68,192.168.100.70,192.168.100.72")
     hbaseConf.set("hbase.zookeeper.property.clientPort", "2181")
@@ -220,7 +266,7 @@ object ZtkRecommendQuestions {
               val question_point_id = f._1.toString
               val isGrasp = f._2
               val wrongRate = f._3
-              put.add(Bytes.toBytes("question_point_info"), Bytes.toBytes(question_point_id), Bytes.toBytes(isGrasp + ":" + wrongRate))
+              put.add(Bytes.toBytes("question_point_info"), Bytes.toBytes(question_point_id), Bytes.toBytes(wrongRate.toString))
           }
 
           buffer += Tuple2(new ImmutableBytesWritable, put)
