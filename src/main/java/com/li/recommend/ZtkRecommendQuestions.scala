@@ -29,7 +29,7 @@ object ZtkRecommendQuestions {
     val inputUrl = "mongodb://huatu_ztk:wEXqgk2Q6LW8UzSjvZrs@192.168.100.153:27017,192.168.100.154:27017,192.168.100.155:27017/huatu_ztk"
 
     val conf = new SparkConf()
-//      .setMaster("local")
+      //      .setMaster("local")
       .setAppName("RecommendQuestion")
       .set("spark.reducer.maxSizeInFlight", "128m")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -96,7 +96,7 @@ object ZtkRecommendQuestions {
 
             val q2p = question2points.value
 
-            question_id.map(f => (q2p(f.toInt), 1)).groupBy(_._1).map {
+            question_id.map(f => (q2p.getOrElse(f.toInt, -1), 1)).groupBy(_._1).map {
               case (a: Int, b: Array[(Int, Int)]) => {
                 var count = 0
                 b.foreach(f => count + f._2)
@@ -129,7 +129,7 @@ object ZtkRecommendQuestions {
 
             val q2p = question2points.value
 
-            question_id.map(f => (q2p(f.toInt), 1)).groupBy(_._1).map {
+            question_id.map(f => (q2p.getOrElse(f.toInt, -1), 1)).groupBy(_._1).map {
               case (a: Int, b: Array[(Int, Int)]) => {
                 var count = 0
                 b.foreach(f => count + f._2)
@@ -162,7 +162,7 @@ object ZtkRecommendQuestions {
 
             val q2p = question2points.value
 
-            question_id.map(f => (q2p(f.toInt), 1)).groupBy(_._1).map {
+            question_id.map(f => (q2p.getOrElse(f.toInt, -1), 1)).groupBy(_._1).map {
               case (a: Int, b: Array[(Int, Int)]) => {
                 var count = 0
                 b.foreach(f => count + f._2)
@@ -194,18 +194,11 @@ object ZtkRecommendQuestions {
               val isGrasp = wro * 1.0 / (fin + wro + col)
               if (isGrasp > 0.40) {
                 arr += ZtkRecommendQuestions(user2Point.split("-")(0).toInt, user2Point.split("-")(1).toInt, 1, isGrasp)
-              } else {
-                arr += ZtkRecommendQuestions(user2Point.split("-")(0).toInt, user2Point.split("-")(1).toInt, 0, isGrasp)
               }
-
-            } else {
-              arr += ZtkRecommendQuestions(user2Point.split("-")(0).toInt, user2Point.split("-")(1).toInt, 0, 0.00)
             }
           }
-
           arr.iterator
       }
-      .filter(_.isGrasp == 1)
       .groupBy(_.user_id)
       .mapPartitions {
         ite =>
