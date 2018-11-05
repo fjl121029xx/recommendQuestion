@@ -101,9 +101,9 @@ public class HBaseUtil {
 
         HBaseAdmin admin = new HBaseAdmin(conf);
 
-        HTableDescriptor table = new HTableDescriptor("ztk_user_question_point_isGrasp");
+        HTableDescriptor table = new HTableDescriptor("ztk_subject_point");
 
-        HColumnDescriptor columnFamily = new HColumnDescriptor("question_point_info");
+        HColumnDescriptor columnFamily = new HColumnDescriptor("point_info");
         columnFamily.setMaxVersions(10);
         table.addFamily(columnFamily);
 

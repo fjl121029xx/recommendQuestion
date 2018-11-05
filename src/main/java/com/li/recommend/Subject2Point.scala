@@ -8,11 +8,11 @@ import org.apache.hadoop.hbase.mapred.TableOutputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.SparkSession
 
 import scala.collection.mutable.{ArrayBuffer, Map}
 
-object Point2Question {
+object Subject2Point {
 
   def main(args: Array[String]): Unit = {
 
@@ -70,17 +70,7 @@ object Point2Question {
             val year = next.get(4).asInstanceOf[Double].intValue()
             val area = next.get(5).asInstanceOf[Double].intValue()
 
-            if (_id == 21952302) {
-              println(subject + ":" + year + ":" + area + ":" + points(2))
-            }
-            if (subject == 1 && points(2) == 3144) {
-              println(subject + ":" + year + ":" + area + ":" + points(2))
-            }
-            if ((subject + ":" + year + ":" + area + ":" + points(2)).startsWith("1:") && (subject + ":" + year + ":" + area + ":" + points(2)).contains("3144")) {
-
-              println(subject + ":" + year + ":" + area + ":" + points(2))
-            }
-            arr += Tuple2(subject + ":" + year + ":" + area + ":" + points(2), _id.toString)
+            arr += Tuple2(subject + "-" + year + "-" + area, points(2).toString)
 
           }
           arr.iterator
@@ -98,7 +88,7 @@ object Point2Question {
 
     val jobConf = new JobConf(hbaseConf)
     jobConf.setOutputFormat(classOf[TableOutputFormat])
-    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "ztk_point_question")
+    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "ztk_subject_point")
     val hbasePar = point2question.mapPartitions {
       ite =>
 
@@ -112,7 +102,7 @@ object Point2Question {
 
 
           val put = new Put(Bytes.toBytes(point_id)) //行健的值
-          put.add(Bytes.toBytes("question_info"), Bytes.toBytes("questions"), Bytes.toBytes(questions))
+          put.add(Bytes.toBytes("point_info"), Bytes.toBytes("points"), Bytes.toBytes(questions))
 
           buffer += Tuple2(new ImmutableBytesWritable, put)
         }

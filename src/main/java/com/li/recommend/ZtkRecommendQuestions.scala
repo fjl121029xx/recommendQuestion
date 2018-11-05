@@ -15,7 +15,7 @@ import scala.collection.mutable.{ArrayBuffer, Map}
 
 case class ZtkRecommendQuestions(
                                   user_id: Int,
-                                  question_point_id: Int,
+                                  question_point_id: String,
                                   isGrasp: Int,
                                   wrongRate: Double
 
@@ -29,7 +29,7 @@ object ZtkRecommendQuestions {
     val inputUrl = "mongodb://huatu_ztk:wEXqgk2Q6LW8UzSjvZrs@192.168.100.153:27017,192.168.100.154:27017,192.168.100.155:27017/huatu_ztk"
 
     val conf = new SparkConf()
-      //      .setMaster("local")
+      .setMaster("local")
       .setAppName("RecommendQuestion")
       .set("spark.reducer.maxSizeInFlight", "128m")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -58,21 +58,24 @@ object ZtkRecommendQuestions {
     ztk_question.printSchema()
     ztk_question.createOrReplaceTempView("ztk_question")
 
-    val question2points = sc.broadcast(sparkSql.sql("select _id, points from ztk_question")
+    val question2points = sc.broadcast(sparkSql.sql("select _id, points,year,area,subject from ztk_question")
       .rdd
       .filter {
         f =>
-          !f.isNullAt(0) && !f.isNullAt(1) && f.getSeq[Double](1).nonEmpty && f.getSeq[Double](1).size > 2
+          !f.isNullAt(0) && !f.isNullAt(1) && f.getSeq[Double](1).nonEmpty && f.getSeq[Double](1).size > 2 && !f.isNullAt(2) && !f.isNullAt(3) && !f.isNullAt(4)
       }
       .mapPartitions {
         ite =>
-          val arr = new ArrayBuffer[(Int, Int)]()
+          val arr = new ArrayBuffer[(Int, String)]()
 
           while (ite.hasNext) {
             val next = ite.next()
             val _id = next.get(0).asInstanceOf[Double].intValue()
             val points = next.get(1).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
-            arr += Tuple2(_id, points.last)
+            val year = next.get(0).asInstanceOf[Double].intValue()
+            val area = next.get(0).asInstanceOf[Double].intValue()
+            val subject = next.get(0).asInstanceOf[Double].intValue()
+            arr += Tuple2(_id, subject + ":" + year + ":" + area + ":" + points.last)
           }
           arr.iterator
       }.collectAsMap()) // 得到知识点集合
@@ -96,10 +99,12 @@ object ZtkRecommendQuestions {
 
             val q2p = question2points.value
 
-            question_id.map(f => (q2p.getOrElse(f.toInt, -1), 1)).groupBy(_._1).map {
-              case (a: Int, b: Array[(Int, Int)]) => {
+            question_id.map(f => (q2p.getOrElse(f.toInt, ""), 1)).groupBy(_._1).map {
+              case (a: String, b: Array[(String, Int)]) => {
+
                 var count = 0
-                b.foreach(f => count + f._2)
+
+                b.foreach(f => count = count + f._2)
                 (a, count)
               }
             }.foreach {
@@ -129,10 +134,10 @@ object ZtkRecommendQuestions {
 
             val q2p = question2points.value
 
-            question_id.map(f => (q2p.getOrElse(f.toInt, -1), 1)).groupBy(_._1).map {
-              case (a: Int, b: Array[(Int, Int)]) => {
+            question_id.map(f => (q2p.getOrElse(f.toInt, ""), 1)).groupBy(_._1).map {
+              case (a: String, b: Array[(String, Int)]) => {
                 var count = 0
-                b.foreach(f => count + f._2)
+                b.foreach(f => count = count + f._2)
                 (a, count)
               }
             }.foreach {
@@ -162,10 +167,10 @@ object ZtkRecommendQuestions {
 
             val q2p = question2points.value
 
-            question_id.map(f => (q2p.getOrElse(f.toInt, -1), 1)).groupBy(_._1).map {
-              case (a: Int, b: Array[(Int, Int)]) => {
+            question_id.map(f => (q2p.getOrElse(f.toInt, ""), 1)).groupBy(_._1).map {
+              case (a: String, b: Array[(String, Int)]) => {
                 var count = 0
-                b.foreach(f => count + f._2)
+                b.foreach(f => count = count + f._2)
                 (a, count)
               }
             }.foreach {
@@ -176,8 +181,9 @@ object ZtkRecommendQuestions {
           arr.iterator
       }
     println(wrong.count())
+
     //    finish.join(wrong).take(100).foreach(println)
-    val user_question_point_isGrasp = finish.fullOuterJoin(wrong)
+    val userWhetherGrasp = finish.fullOuterJoin(wrong)
       .mapPartitions {
         ite =>
           val arr = new ArrayBuffer[ZtkRecommendQuestions]()
@@ -192,25 +198,46 @@ object ZtkRecommendQuestions {
 
             if (fin + wro + col != 0) {
               val isGrasp = wro * 1.0 / (fin + wro + col)
-              if (isGrasp > 0.40) {
-                arr += ZtkRecommendQuestions(user2Point.split("-")(0).toInt, user2Point.split("-")(1).toInt, 1, isGrasp)
+
+              val up = user2Point.split("-")
+              if (up.length > 1) {
+
+                val user = up(0) match {
+                  case "" => -1
+                  case _ => up(0).toInt
+                }
+                val point = up(1) match {
+                  case "" => ""
+                  case _ => up(1)
+                }
+                if (isGrasp > 0.40) {
+                  arr += ZtkRecommendQuestions(user, point, 1, isGrasp)
+                }
+                //                else {
+                //                  arr += ZtkRecommendQuestions(user, point, 0, isGrasp)
+                //                }
               }
+
             }
           }
           arr.iterator
       }
-      .groupBy(_.user_id)
+
+    //    val userNotGrasp = userWhetherGrasp.filter(_.isGrasp == 1)
+    //    val userIsGrasp = userWhetherGrasp.filter(_.isGrasp == 0)
+
+    val user_question_point_isGrasp = userWhetherGrasp.groupBy(_.user_id)
       .mapPartitions {
         ite =>
           val pids = question2points.value
-          val arr = new ArrayBuffer[(Int, Seq[(Int, Int, Double)])]()
+          val arr = new ArrayBuffer[(Int, Seq[(String, Int, Double)])]()
 
           while (ite.hasNext) {
             val next = ite.next()
 
             val user_id = next._1
             val point_id_ite = next._2.iterator
-            val s = new ArrayBuffer[(Int, Int, Double)]()
+            val s = new ArrayBuffer[(String, Int, Double)]()
             while (point_id_ite.hasNext) {
 
               val n = point_id_ite.next()
@@ -239,7 +266,7 @@ object ZtkRecommendQuestions {
 
     val jobConf = new JobConf(hbaseConf)
     jobConf.setOutputFormat(classOf[TableOutputFormat])
-    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "ztk_user_question_point_isGrasp")
+    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "ztk_user_question_point_NotGrasp")
     val hbasePar = user_question_point_isGrasp.repartition(339).mapPartitions {
       ite =>
 
