@@ -70,11 +70,15 @@ object Subject2Point {
             val year = next.get(4).asInstanceOf[Double].intValue()
             val area = next.get(5).asInstanceOf[Double].intValue()
 
-            arr += Tuple2(subject + "-" + year + "-" + area, points(2).toString)
+            //            arr += Tuple2(subject + ":" + year + ":" + area, points(2).toString)
+            arr += Tuple2(subject + ":" + area, points(2).toString)
+            //            arr += Tuple2(subject + ":" + year, points(2).toString)
+            //            arr += Tuple2(subject.toString , points(2).toString)
 
           }
           arr.iterator
       }
+      .distinct()
       .reduceByKey((a, b) => a.concat(",").concat(b))
 
     val hbaseConf = HBaseConfiguration.create()

@@ -70,17 +70,10 @@ object Point2Question {
             val year = next.get(4).asInstanceOf[Double].intValue()
             val area = next.get(5).asInstanceOf[Double].intValue()
 
-            if (_id == 21952302) {
-              println(subject + ":" + year + ":" + area + ":" + points(2))
-            }
-            if (subject == 1 && points(2) == 3144) {
-              println(subject + ":" + year + ":" + area + ":" + points(2))
-            }
-            if ((subject + ":" + year + ":" + area + ":" + points(2)).startsWith("1:") && (subject + ":" + year + ":" + area + ":" + points(2)).contains("3144")) {
-
-              println(subject + ":" + year + ":" + area + ":" + points(2))
-            }
-            arr += Tuple2(subject + ":" + year + ":" + area + ":" + points(2), _id.toString)
+            //            arr += Tuple2(subject + ":" + year + ":" + points(2), _id.toString)
+            //            arr += Tuple2(subject + ":" + points(2), _id.toString)
+            arr += Tuple2(subject + ":" + area + ":" + points(2), _id.toString)
+            //            arr += Tuple2(subject + ":" + year + ":" + area + ":" + points(2), _id.toString)
 
           }
           arr.iterator

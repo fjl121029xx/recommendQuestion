@@ -26,10 +26,26 @@ object ZtkRecommendQuestions {
   def main(args: Array[String]): Unit = {
 
 
+    if (args.length < 1) {
+      System.err.println(s"Your arguments were ${args.mkString("[", ", ", "]")}")
+//      System.err.println(
+//        """
+//          |Usage: ZtkRecommendQuestions <wrongRate> describe the TCP server that Spark
+//          |     work would connect to receive data. <checkpoint-directory> directory to
+//          |     HDFS-compatible file system which checkpoint data <output-file> file to which the
+//          |     word counts will be appended
+//          |
+//          |In local mode, <master> should be 'local[n]' with n > 1
+//          |Both <checkpoint-directory> and <output-file> must be absolute paths
+//        """.stripMargin
+//      )
+      System.exit(1)
+    }
+
     val inputUrl = "mongodb://huatu_ztk:wEXqgk2Q6LW8UzSjvZrs@192.168.100.153:27017,192.168.100.154:27017,192.168.100.155:27017/huatu_ztk"
 
     val conf = new SparkConf()
-      .setMaster("local")
+      //      .setMaster("local")
       .setAppName("RecommendQuestion")
       .set("spark.reducer.maxSizeInFlight", "128m")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -43,10 +59,13 @@ object ZtkRecommendQuestions {
 
     import com.mongodb.spark.sql._
 
+
     val sparkSql = SparkSession.builder().config(conf).getOrCreate()
     import sparkSql.implicits._
 
     val sc = sparkSql.sparkContext
+    val wrongRate = sc.broadcast(args(0).toDouble)
+
 
     val ztk_question = sparkSql.loadFromMongoDB(
       ReadConfig(
@@ -72,9 +91,9 @@ object ZtkRecommendQuestions {
             val next = ite.next()
             val _id = next.get(0).asInstanceOf[Double].intValue()
             val points = next.get(1).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
-            val year = next.get(0).asInstanceOf[Double].intValue()
-            val area = next.get(0).asInstanceOf[Double].intValue()
-            val subject = next.get(0).asInstanceOf[Double].intValue()
+            val year = next.get(2).asInstanceOf[Double].intValue()
+            val area = next.get(3).asInstanceOf[Double].intValue()
+            val subject = next.get(4).asInstanceOf[Double].intValue()
             arr += Tuple2(_id, subject + ":" + year + ":" + area + ":" + points.last)
           }
           arr.iterator
@@ -84,7 +103,7 @@ object ZtkRecommendQuestions {
     /**
       * 1196836
       */
-    val collect = sc.broadcast(sc.textFile("hdfs://huatu70/ztk_question_record/v_question_user_cache_collect/*")
+    val collect = sc.broadcast(sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_collect/*")
       .coalesce(10)
       .mapPartitions {
         ite =>
@@ -118,7 +137,7 @@ object ZtkRecommendQuestions {
     /**
       * 28291890
       */
-    val finish = sc.textFile("hdfs://huatu70/ztk_question_record/v_question_user_cache_finish")
+    val finish = sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_finish")
       .coalesce(10)
       .mapPartitions {
         ite =>
@@ -152,7 +171,7 @@ object ZtkRecommendQuestions {
     /**
       * 30705910
       */
-    val wrong = sc.textFile("hdfs://huatu70/ztk_question_record/v_question_user_cache_wrong")
+    val wrong = sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_wrong")
       .coalesce(10)
       .mapPartitions {
         ite =>
@@ -188,6 +207,7 @@ object ZtkRecommendQuestions {
         ite =>
           val arr = new ArrayBuffer[ZtkRecommendQuestions]()
           val coll = collect.value
+          val wRate = wrongRate.value
 
           while (ite.hasNext) {
             val next = ite.next()
@@ -210,7 +230,7 @@ object ZtkRecommendQuestions {
                   case "" => ""
                   case _ => up(1)
                 }
-                if (isGrasp > 0.40) {
+                if (isGrasp > wRate) {
                   arr += ZtkRecommendQuestions(user, point, 1, isGrasp)
                 }
                 //                else {
@@ -282,7 +302,7 @@ object ZtkRecommendQuestions {
 
           isGraspInfo.foreach {
             f =>
-              //question_point_id, isGrasp, wrongRate
+              //question_point_id, isGrasp, wrongRateli
               val question_point_id = f._1.toString
               val isGrasp = f._2
               val wrongRate = f._3
