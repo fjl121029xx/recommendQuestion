@@ -88,7 +88,7 @@ object ZtkRecommendQuestions {
           val arr = new ArrayBuffer[(Int, String)]()
 
           while (ite.hasNext) {
-            val next = ite.next()
+            val next = ite.next()next
             val _id = next.get(0).asInstanceOf[Double].intValue()
             val points = next.get(1).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
             val year = next.get(2).asInstanceOf[Double].intValue()
@@ -104,7 +104,7 @@ object ZtkRecommendQuestions {
       * 1196836
       */
     val collect = sc.broadcast(sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_collect/*")
-      .coalesce(10)
+      .repartition(30)
       .mapPartitions {
         ite =>
           var arr = new ArrayBuffer[(String, Int)]()
@@ -138,7 +138,7 @@ object ZtkRecommendQuestions {
       * 28291890
       */
     val finish = sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_finish")
-      .coalesce(10)
+      .repartition(30)
       .mapPartitions {
         ite =>
           var arr = new ArrayBuffer[(String, Int)]()
@@ -172,7 +172,7 @@ object ZtkRecommendQuestions {
       * 30705910
       */
     val wrong = sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_wrong")
-      .coalesce(10)
+      .repartition(30)
       .mapPartitions {
         ite =>
           var arr = new ArrayBuffer[(String, Int)]()
@@ -202,7 +202,7 @@ object ZtkRecommendQuestions {
     println(wrong.count())
 
     //    finish.join(wrong).take(100).foreach(println)
-    val userWhetherGrasp = finish.fullOuterJoin(wrong)
+    val userWhetherGrasp = finish.fullOuterJoin(wrong).repartition(1000)
       .mapPartitions {
         ite =>
           val arr = new ArrayBuffer[ZtkRecommendQuestions]()
