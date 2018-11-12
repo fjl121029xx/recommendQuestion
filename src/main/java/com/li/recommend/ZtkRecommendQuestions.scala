@@ -88,7 +88,7 @@ object ZtkRecommendQuestions {
           val arr = new ArrayBuffer[(Int, String)]()
 
           while (ite.hasNext) {
-            val next = ite.next()next
+            val next = ite.next()
             val _id = next.get(0).asInstanceOf[Double].intValue()
             val points = next.get(1).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
             val year = next.get(2).asInstanceOf[Double].intValue()
