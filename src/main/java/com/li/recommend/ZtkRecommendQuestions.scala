@@ -103,7 +103,7 @@ object ZtkRecommendQuestions {
     /**
       * 1196836
       */
-    val collect = sc.broadcast(sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_collect/*")
+    val collect = sc.broadcast(sc.textFile("hdfs://ns1/ztk_question_record/v_question_user_cache_collect/*")
       .repartition(30)
       .mapPartitions {
         ite =>
@@ -137,7 +137,7 @@ object ZtkRecommendQuestions {
     /**
       * 28291890
       */
-    val finish = sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_finish")
+    val finish = sc.textFile("hdfs://ns1/ztk_question_record/v_question_user_cache_finish")
       .repartition(30)
       .mapPartitions {
         ite =>
@@ -171,7 +171,7 @@ object ZtkRecommendQuestions {
     /**
       * 30705910
       */
-    val wrong = sc.textFile("hdfs://huatu68/ztk_question_record/v_question_user_cache_wrong")
+    val wrong = sc.textFile("hdfs://ns1/ztk_question_record/v_question_user_cache_wrong")
       .repartition(30)
       .mapPartitions {
         ite =>
