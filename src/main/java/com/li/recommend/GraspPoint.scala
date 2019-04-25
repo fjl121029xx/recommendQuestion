@@ -13,47 +13,46 @@ import org.apache.spark.{SparkConf, SparkContext}
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Map}
 
-case class ZtkRecommendQuestions(
-                                  user_id: Int,
-                                  question_point_id: String,
-                                  isGrasp: Int,
-                                  wrongRate: Double
+case class GraspPoint(
+                       user_id: Int,
+                       question_point_id: String,
+                       isGrasp: Int,
+                       wrongRate: Double
 
-                                )
+                     )
 
-object ZtkRecommendQuestions {
+object GraspPoint {
 
   def main(args: Array[String]): Unit = {
 
 
-    if (args.length < 1) {
-      System.err.println(s"Your arguments were ${args.mkString("[", ", ", "]")}")
-//      System.err.println(
-//        """
-//          |Usage: ZtkRecommendQuestions <wrongRate> describe the TCP server that Spark
-//          |     work would connect to receive data. <checkpoint-directory> directory to
-//          |     HDFS-compatible file system which checkpoint data <output-file> file to which the
-//          |     word counts will be appended
-//          |
-//          |In local mode, <master> should be 'local[n]' with n > 1
-//          |Both <checkpoint-directory> and <output-file> must be absolute paths
-//        """.stripMargin
-//      )
-      System.exit(1)
-    }
+    /* if (args.length < 1) {
+       System.err.println(s"Your arguments were ${args.mkString("[", ", ", "]")}")
+ //      System.err.println(
+ //        """
+ //          |Usage: ZtkRecommendQuestions <wrongRate> describe the TCP server that Spark
+ //          |     work would connect to receive data. <checkpoint-directory> directory to
+ //          |     HDFS-compatible file system which checkpoint data <output-file> file to which the
+ //          |     word counts will be appended
+ //          |
+ //          |In local mode, <master> should be 'local[n]' with n > 1
+ //          |Both <checkpoint-directory> and <output-file> must be absolute paths
+ //        """.stripMargin
+ //      )
+       System.exit(1)
+     }*/
 
     val inputUrl = "mongodb://huatu_ztk:wEXqgk2Q6LW8UzSjvZrs@192.168.100.153:27017,192.168.100.154:27017,192.168.100.155:27017/huatu_ztk"
 
     val conf = new SparkConf()
-      //      .setMaster("local")
-      .setAppName("RecommendQuestion")
+      .setMaster("local")
+      .setAppName("GraspPoint")
       .set("spark.reducer.maxSizeInFlight", "128m")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.mongodb.input.readPreference.name", "secondaryPreferred")
-      .set("spark.mongodb.input.partitioner", "MongoSamplePartitioner")
-      .set("spark.mongodb.input.partitionKey", "_id")
-      .set("spark.mongodb.input.partitionSizeMB", "5120")
-      .set("spark.mongodb.input.samplesPerPartition", "5000000")
+      .set("spark.mongodb.input.partitioner", "MongoPaginateBySizePartitioner")
+      .set("spark.mongodb.input.partitionerOptions.partitionKey", "_id")
+      .set("spark.mongodb.input.partitionerOptions.partitionSizeMB", "32")
       .set("spark.debug.maxToStringFields", "100")
       .registerKryoClasses(Array(classOf[scala.collection.mutable.WrappedArray.ofRef[_]]))
 
@@ -64,13 +63,13 @@ object ZtkRecommendQuestions {
     import sparkSql.implicits._
 
     val sc = sparkSql.sparkContext
-    val wrongRate = sc.broadcast(args(0).toDouble)
+    val wrongRate = sc.broadcast(0.3)
 
 
     val ztk_question = sparkSql.loadFromMongoDB(
       ReadConfig(
         mutable.Map(
-          "uri" -> inputUrl.concat(".ztk_question"),
+          "uri" -> inputUrl.concat(".ztk_question_new"),
           "maxBatchSize" -> "1000000",
           "keep_alive_ms" -> "500")
       )).toDF() // Uses the ReadConfig
@@ -89,11 +88,11 @@ object ZtkRecommendQuestions {
 
           while (ite.hasNext) {
             val next = ite.next()
-            val _id = next.get(0).asInstanceOf[Double].intValue()
-            val points = next.get(1).asInstanceOf[Seq[Double]].map { f => f.toInt }.seq
-            val year = next.get(2).asInstanceOf[Double].intValue()
-            val area = next.get(3).asInstanceOf[Double].intValue()
-            val subject = next.get(4).asInstanceOf[Double].intValue()
+            val _id = next.getInt(0)
+            val points = next.get(1).asInstanceOf[Seq[Int]].map { f => f.toInt }.seq
+            val year = next.getInt(2)
+            val area = next.getInt(3)
+            val subject = next.getInt(4)
             arr += Tuple2(_id, subject + ":" + year + ":" + area + ":" + points.last)
           }
           arr.iterator
@@ -103,7 +102,7 @@ object ZtkRecommendQuestions {
     /**
       * 1196836
       */
-    val collect = sc.broadcast(sc.textFile("hdfs://ns1/ztk_question_record/v_question_user_cache_collect/*")
+    val collect = sc.broadcast(sc.textFile("hdfs://ns1/huatu-data/mysql/v_question_user_cache_collect/*")
       .repartition(30)
       .mapPartitions {
         ite =>
@@ -137,7 +136,7 @@ object ZtkRecommendQuestions {
     /**
       * 28291890
       */
-    val finish = sc.textFile("hdfs://ns1/ztk_question_record/v_question_user_cache_finish")
+    val finish = sc.textFile("hdfs://ns1/huatu-data/mysql/v_question_user_cache_finish")
       .repartition(30)
       .mapPartitions {
         ite =>
@@ -171,7 +170,7 @@ object ZtkRecommendQuestions {
     /**
       * 30705910
       */
-    val wrong = sc.textFile("hdfs://ns1/ztk_question_record/v_question_user_cache_wrong")
+    val wrong = sc.textFile("hdfs://ns1/huatu-data/mysql/v_question_user_cache_wrong")
       .repartition(30)
       .mapPartitions {
         ite =>
@@ -205,7 +204,7 @@ object ZtkRecommendQuestions {
     val userWhetherGrasp = finish.fullOuterJoin(wrong).repartition(1000)
       .mapPartitions {
         ite =>
-          val arr = new ArrayBuffer[ZtkRecommendQuestions]()
+          val arr = new ArrayBuffer[GraspPoint]()
           val coll = collect.value
           val wRate = wrongRate.value
 
@@ -231,7 +230,7 @@ object ZtkRecommendQuestions {
                   case _ => up(1)
                 }
                 if (isGrasp > wRate) {
-                  arr += ZtkRecommendQuestions(user, point, 1, isGrasp)
+                  arr += GraspPoint(user, point, 1, isGrasp)
                 }
                 //                else {
                 //                  arr += ZtkRecommendQuestions(user, point, 0, isGrasp)
@@ -286,7 +285,7 @@ object ZtkRecommendQuestions {
 
     val jobConf = new JobConf(hbaseConf)
     jobConf.setOutputFormat(classOf[TableOutputFormat])
-    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "ztk_user_question_point_NotGrasp")
+    jobConf.set(TableOutputFormat.OUTPUT_TABLE, "grasp")
     val hbasePar = user_question_point_isGrasp.repartition(339).mapPartitions {
       ite =>
 
@@ -306,7 +305,7 @@ object ZtkRecommendQuestions {
               val question_point_id = f._1.toString
               val isGrasp = f._2
               val wrongRate = f._3
-              put.add(Bytes.toBytes("question_point_info"), Bytes.toBytes(question_point_id), Bytes.toBytes(wrongRate.toString))
+              put.add(Bytes.toBytes("base_info"), Bytes.toBytes(question_point_id), Bytes.toBytes(wrongRate.toString))
           }
 
           buffer += Tuple2(new ImmutableBytesWritable, put)
