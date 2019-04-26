@@ -45,7 +45,7 @@ object GraspPoint {
     val inputUrl = "mongodb://huatu_ztk:wEXqgk2Q6LW8UzSjvZrs@192.168.100.153:27017,192.168.100.154:27017,192.168.100.155:27017/huatu_ztk"
 
     val conf = new SparkConf()
-      .setMaster("local")
+      //      .setMaster("local")
       .setAppName("GraspPoint")
       .set("spark.reducer.maxSizeInFlight", "128m")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -171,7 +171,7 @@ object GraspPoint {
       * 30705910
       */
     val wrong = sc.textFile("hdfs://ns1/huatu-data/mysql/v_question_user_cache_wrong")
-      .repartition(30)
+      .repartition(240)
       .mapPartitions {
         ite =>
           var arr = new ArrayBuffer[(String, Int)]()
@@ -267,7 +267,8 @@ object GraspPoint {
 
               s += Tuple3(question_point_id, isGrasp, wrongRate)
               s.sortBy(_._3)
-            }
+0
+            0}
             import scala.util.control._
 
             arr += Tuple2(user_id, s)
